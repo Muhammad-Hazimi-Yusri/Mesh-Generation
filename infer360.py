@@ -66,7 +66,7 @@ def process(depth_file, material_file, rgb_file, out_prefix):
     from lib_edgenet360.post_process import voxel_filter, voxel_fill, fill_limits_vox, instance_remover,\
                                             remove_internal_voxels_v2
 
-    from tensorflow.keras.optimizers import SGD
+    from tensorflow.keras.optimizers.legacy import SGD
     import cv2
 
      # Load the material map file
