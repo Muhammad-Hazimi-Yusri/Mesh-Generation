@@ -209,7 +209,11 @@ def voxel_fill(vox_orig):
                     sub_vol_flat = sub_vol[sub_vol != 0]
                     if len(sub_vol_flat) == 0:
                         continue
-                    cl = stats.mode(sub_vol_flat)[0][0]
+                    mode_result = stats.mode(sub_vol_flat)
+                    mode_array = np.atleast_1d(mode_result.mode)  # Ensure mode_result.mode is array-like
+                    if mode_array.size == 0:  # Ensure mode result is not empty
+                        continue
+                    cl = mode_array[0]
                     sub_vol[sub_vol != cl] = 0
                     sub_vol[sub_vol == cl] = 1
                     support = np.sum(sub_vol)
