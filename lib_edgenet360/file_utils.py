@@ -1,3 +1,14 @@
+"""
+Edits for material mapping:
+
+Passes in material encoded voxel grid into obj_export
+Implemented object splitting in obj_export
+Using object assignement and material encoded voxel grid,
+implemented majority voting to assign material to each object
+
+"""
+
+
 #from lib_csscnet.py_cuda import *
 import numpy as np
 from sklearn.utils import shuffle
@@ -5,7 +16,33 @@ from fnmatch import fnmatch
 import os
 from tensorflow.keras.utils import to_categorical
 import threading
+from collections import defaultdict, Counter
+from skimage import measure
 from lib_edgenet360.mesh_utils import draw_mesh
+
+
+material_labels_swapped = {
+    "asphalt": 0, "ceramic": 1, "concrete": 2, "fabric": 3, "foliage": 4,
+    "food": 5, "glass": 6, "metal": 7, "paper": 8, "plaster": 9, "plastic": 10,
+    "rubber": 11, "soil": 12, "stone": 13, "water": 14, "wood": 15
+}
+
+material_labels = {
+    0: "asphalt", 1: "ceramic", 2: "concrete", 3: "fabric", 4: "foliage",
+    5: "food", 6: "glass", 7: "metal", 8: "paper", 9: "plaster", 10: "plastic",
+    11: "rubber", 12: "soil", 13: "stone", 14: "water", 15: "wood"
+}
+
+
+color_plate = {
+    0: [119, 17, 17], 1: [202, 198, 144], 2: [186, 200, 238], 3: [0, 0, 200], 4: [89, 125, 49],
+    5: [16, 68, 16], 6: [187, 129, 156], 7: [208, 206, 72], 8: [98, 39, 69], 9: [102, 102, 102],
+    10: [76, 74, 95], 11: [16, 16, 68], 12: [68, 65, 38], 13: [117, 214, 70], 14: [221, 67, 72],
+    15: [92, 133, 119]
+}
+
+grayscale_plate = {0: 47, 1: 193, 2: 200, 3: 23, 4: 106, 5: 41, 6: 149, 7: 191, 8: 60, 9: 102,
+                   10: 77, 11: 22, 12: 63, 13: 169, 14: 114, 15: 119}
 
 
 def get_file_prefixes_from_path(data_path, criteria="*.bin"):
@@ -424,7 +461,7 @@ def write_mtl_faces(obj_file, mtl_file, mtl_faces_list, cl, triangular):
             obj_file.write("\n")
 
 
-def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, triangular=False, inner_faces=True):
+def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, triangular=False, inner_faces=True, material_map = None):
 
     vu = v_unit * 4
 
@@ -448,6 +485,81 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
     vertex_coords = np.zeros((1000,1000,1000), dtype='int32')
     vertex_categories = []
     vertex_list = []
+
+    # Create a dictionary to store the mapping from voxel classes to texture IDs
+    vox_to_texture = defaultdict(list)
+    #Object splitting 
+    print("voxel split\n")
+    objectCheck = ["window", "chair", "bed", "sofa","table", "tvs", "furniture", "objects"]
+    added_class =[]
+    added_colors =[]
+    for idx,k in enumerate(class_names):
+        if k in objectCheck:
+            temp = np.zeros(vox.shape)
+            for x in range(sx):
+                for y in range(sy):
+                    for z in range(sz):
+                        mtl = int(vox[x,y,z])
+                        
+                        if mtl == 0 or mtl == 255:
+                            continue
+                        try:
+                            if class_names[mtl] == k:
+                                temp[x,y,z] = 1
+                        except:
+                            continue
+
+            voxel_split_labels = measure.label(temp,connectivity =2)
+            numLabels = len(np.unique(voxel_split_labels))-1
+            class_color = class_colors[idx]
+            for i in range(numLabels):
+                added_class.append(str(k+" "+str(i)))
+                added_colors.append(class_color)
+                
+            for x in range(sx):
+                for y in range(sy):
+                    for z in range(sz):
+                        flag = voxel_split_labels[x,y,z]
+                        if flag == 0:
+                            continue
+
+                        else:
+                            vox[x,y,z] = int((len(class_names)+len(added_class))-(numLabels-flag) -1)
+    
+    class_names.extend(added_class)
+    class_colors.extend(added_colors)
+    num_classes=len(class_names)
+    mtl_faces_list =[None] * num_classes
+
+    # Calculate frequency of each material per object
+    for i in range(vox.shape[0]):
+        for j in range(vox.shape[1]):
+            for k in range(vox.shape[2]):
+                voxel_class = vox[i, j, k]
+                texture_id = material_map[i, j, k]
+
+                if texture_id != 0:
+                    for key, value in grayscale_plate.items():
+                        if texture_id == value:
+                            material_key = key
+                            break
+                    vox_to_texture[voxel_class].append(material_key)
+
+    majority_texture = {}
+
+    # Assign most common material per object
+    for voxel_class, texture_ids in vox_to_texture.items():
+        print(class_names[voxel_class],":\n")
+        most_common = Counter(texture_ids).most_common()
+        for rank, (value, frequency) in enumerate(most_common, 1):
+            print(f'Rank: {rank}, Value: {value}, Frequency: {frequency}')
+            
+        most_common_texture_id, _ = Counter(texture_ids).most_common(1)[0]
+        if voxel_class != 0 and voxel_class!=255:
+            majority_texture[class_names[voxel_class]] = material_labels.get(most_common_texture_id)
+
+
+    
 
     with open(name+".obj", 'w') as obj_file, open(name+".mtl", 'w') as mtl_file:
 
@@ -596,7 +708,28 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
             if not  mtl_faces_list[mtl] is None:
                 write_mtl_faces(obj_file, mtl_file, mtl_faces_list[mtl], mtl, triangular)
 
-    draw_mesh(name+"_mesh.obj", vertex_coords, vertex_categories, vertex_list, v_unit)
+        new_object_labels = []
+        for k,v in majority_texture.items():
+            if k != "floor" and k != "wall" and k!= "ceiling":
+                temp = np.zeros(vox.shape)
+                for x in range(sx):
+                    for y in range(sy):
+                        for z in range(sz):
+                            mtl = int(vox[x,y,z])
+                            if mtl == 0 or mtl == 255:
+                                continue
+                            if class_names[mtl] == k:
+                                temp[x,y,z] = 1
+
+                voxel_split_labels = measure.label(temp,connectivity =2)
+                numLabels = np.unique(voxel_split_labels)
+                print(k, "split objects: ", len(numLabels))
+
+        
+        
+        print("Material assigned to object-> ",majority_texture)
+
+        draw_mesh(name+"_mesh.obj", vertex_coords, vertex_categories, vertex_list, v_unit, majority_texture,class_names)
 
     return
 
