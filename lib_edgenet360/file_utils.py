@@ -539,11 +539,13 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
                 texture_id = material_map[i, j, k]
 
                 if texture_id != 0:
+                    material_key = None  # Initialize with a default value
                     for key, value in grayscale_plate.items():
                         if texture_id == value:
                             material_key = key
                             break
-                    vox_to_texture[voxel_class].append(material_key)
+                    if material_key is not None:
+                        vox_to_texture[voxel_class].append(material_key)
 
     majority_texture = {}
 
