@@ -1,3 +1,12 @@
+"""
+Edits for material mapping:
+Passed in material image into ftsdf functions for material encoding voxel grid
+Added downsampling functionality fo material grid
+These changes are also reflected in the lib_edgenet360.cu file
+"""
+
+
+
 import ctypes
 import numpy as np
 import cv2
@@ -295,6 +304,20 @@ def downsample_limits(in_vox_grid):
                       )
     return out_vox_grid
 
+_lib.downsample_material_grid.argtypes = (ctypes.c_void_p,
+                            ctypes.c_void_p
+                            )
+
+def downsample_material_grid(in_vox_grid):
+    global _lib, voxel_shape
+
+    out_vox_grid = np.zeros((voxel_shape[0]//4,voxel_shape[1]//4,voxel_shape[2]//4 ),dtype=np.uint8)
+
+    _lib.downsample_material_grid(in_vox_grid.ctypes.data_as(ctypes.c_void_p),
+                        out_vox_grid.ctypes.data_as(ctypes.c_void_p)
+                      )
+    return out_vox_grid
+
 _lib.FTSDFDepth.argtypes = (ctypes.c_void_p,
                            ctypes.c_void_p,
                            ctypes.c_void_p,
@@ -305,12 +328,14 @@ _lib.FTSDFDepth.argtypes = (ctypes.c_void_p,
                            ctypes.c_int,
                            ctypes.c_int,
                            ctypes.c_void_p,
-                            ctypes.c_int
+                            ctypes.c_int,
+                            ctypes.c_void_p,
+                            ctypes.c_void_p
                          )
 
 
 def get_ftsdf(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_y, max_y, min_z, max_z,
-               baseline, vol_number=1):
+               baseline, material_file, vol_number=1):
     global _lib, voxel_shape
 
     boundaries = np.array([min_x, max_x, min_y, max_y, min_z, max_z], dtype=np.float32)
@@ -318,6 +343,7 @@ def get_ftsdf(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_y, max_y,
     vox_tsdf = np.zeros(voxel_shape,dtype=np.float32)
     vox_tsdf_edges = np.zeros(voxel_shape,dtype=np.float32)
     vox_limits = np.zeros(voxel_shape,dtype=np.uint8)
+    material_arr = np.zeros(voxel_shape,dtype=np.uint8)
 
     _lib.FTSDFDepth(depth_image.ctypes.data_as(ctypes.c_void_p),
                    vox_grid.ctypes.data_as(ctypes.c_void_p),
@@ -329,9 +355,11 @@ def get_ftsdf(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_y, max_y,
                    ctypes.c_int(width),
                    ctypes.c_int(height),
                    boundaries.ctypes.data_as(ctypes.c_void_p),
-                   ctypes.c_int(vol_number)
+                   ctypes.c_int(vol_number),
+                    material_file.ctypes.data_as(ctypes.c_void_p),
+                   material_arr.ctypes.data_as(ctypes.c_void_p)
                   )
-    return vox_tsdf, vox_tsdf_edges, vox_limits
+    return vox_tsdf, vox_tsdf_edges, vox_limits, material_arr
 
 
 _lib.FTSDFDepth_stanford.argtypes = (ctypes.c_void_p,
@@ -343,11 +371,13 @@ _lib.FTSDFDepth_stanford.argtypes = (ctypes.c_void_p,
                            ctypes.c_int,
                            ctypes.c_int,
                            ctypes.c_void_p,
-                            ctypes.c_int
+                            ctypes.c_int,
+                            ctypes.c_void_p,
+                            ctypes.c_void_p
                          )
 
 
-def get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_y, max_y, min_z, max_z, vol_number=1):
+def get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_y, max_y, min_z, max_z, material_file, vol_number=1):
     global _lib, voxel_shape
 
     boundaries = np.array([min_x, max_x, min_y, max_y, min_z, max_z], dtype=np.float32)
@@ -355,6 +385,7 @@ def get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_
     vox_tsdf = np.zeros(voxel_shape,dtype=np.float32)
     vox_tsdf_edges = np.zeros(voxel_shape,dtype=np.float32)
     vox_limits = np.zeros(voxel_shape,dtype=np.uint8)
+    material_arr = np.zeros(voxel_shape,dtype=np.uint8)
 
     _lib.FTSDFDepth_stanford(depth_image.ctypes.data_as(ctypes.c_void_p),
                    vox_grid.ctypes.data_as(ctypes.c_void_p),
@@ -365,9 +396,11 @@ def get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges, min_x, max_x, min_
                    ctypes.c_int(width),
                    ctypes.c_int(height),
                    boundaries.ctypes.data_as(ctypes.c_void_p),
-                   ctypes.c_int(vol_number)
+                   ctypes.c_int(vol_number),
+                   material_file.ctypes.data_as(ctypes.c_void_p),
+                   material_arr.ctypes.data_as(ctypes.c_void_p)
                   )
-    return vox_tsdf, vox_tsdf_edges, vox_limits
+    return vox_tsdf, vox_tsdf_edges, vox_limits, material_arr
 
 
 

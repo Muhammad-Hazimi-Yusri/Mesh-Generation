@@ -31,12 +31,23 @@ FILL_LIMITS = True
 INNER_FACES = False
 INCLUDE_TOP = False
 ############################################################################################################ end
+material_labels = {
+    "asphalt": 0, "ceramic": 1, "concrete": 2, "fabric": 3, "foliage": 4,
+    "food": 5, "glass": 6, "metal": 7, "paper": 8, "plaster": 9, "plastic": 10,
+    "rubber": 11, "soil": 12, "stone": 13, "water": 14, "wood": 15
+}
+
+color_plate = {
+    0: [119, 17, 1], 1 : [202, 198, 144], 2: [186, 200, 238], 3: [0, 0, 200], 4: [89, 125, 49],
+    5: [0, 70, 0], 6: [187, 129, 156], 7: [208, 206, 72], 8: [98, 39, 69], 9: [102, 102, 102],
+    10: [76, 74, 95], 11: [16, 16, 68], 12: [68, 65, 38], 13: [117, 214, 70], 14: [221, 67, 72],
+    15: [92, 133, 119]
+}
 
 
-
-def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
+def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network,material_file):
     from lib_edgenet360.py_cuda import lib_edgenet360_setup, get_point_cloud_stanford, \
-         get_voxels, downsample_grid, get_ftsdf_stanford, downsample_limits, get_gt, get_class_names
+         get_voxels, downsample_grid, get_ftsdf_stanford, downsample_limits, get_gt, get_class_names, downsample_material_grid
     from lib_edgenet360.file_utils import voxel_export
     from lib_edgenet360.network import get_network_by_name
     from lib_edgenet360.metrics import comp_iou, seg_iou, comp_iou_stanford, seg_iou_stanford
@@ -53,6 +64,27 @@ def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
     from lib_edgenet360.post_process import voxel_filter, voxel_fill, fill_limits_vox, instance_remover,\
                                             remove_internal_voxels_v2
     ############################################################################################## end
+
+    # Load the material map file
+    material_map = cv2.imread(material_file, cv2.IMREAD_COLOR)
+    material_mapRGB = cv2.cvtColor(material_map, cv2.COLOR_BGR2RGB)
+    material_mapGray = cv2.cvtColor(material_map, cv2.COLOR_BGR2GRAY)
+
+
+    # Create color-plate type dictionary for GrayScale Instead: ma
+    GrayScale_plate = {}
+    for i in range(len(material_mapRGB)):
+        label = [k for k, v in color_plate.items() if v ==  material_mapRGB[i][0].tolist()]
+    if label[0] not in GrayScale_plate:
+        GrayScale_plate[label[0]] = material_mapGray[i][0].tolist()
+
+
+    if material_map is None:
+        print("Failed to load image")
+    else:
+        # Display the image
+        print("Material Map Loaded successfully")
+
 
     lib_edgenet360_setup(device=0, num_threads=1024, v_unit=v_unit, v_margin=0.24, f=518.8579, debug=0)
 
@@ -106,6 +138,7 @@ def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
     pred_full = np.zeros((xs*2,ys,xs*2,12), dtype=np.float32)
     surf_full = np.zeros((xs*2,ys,xs*2), dtype=np.uint8)
     flags_full = np.zeros((xs*2,ys,xs*2), dtype=np.uint8)
+    mat_full = np.zeros((xs*2,ys,xs*2), dtype=np.uint8)
 
     for ix in range(8):
 
@@ -130,10 +163,12 @@ def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
         out_file =out_prefix+'_view'+str(view)+'_edges.bin'
         voxel_export(out_file, vox_grid_edges_down, vox_grid_down.shape)
 
-        vox_tsdf, vox_tsdf_edges, vox_limits = get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges,
+        vox_tsdf, vox_tsdf_edges, vox_limits, material_arr = get_ftsdf_stanford(depth_image, vox_grid, vox_grid_edges,
                                                                   min_x=left_dist, max_x=right_dist,
                                                                   min_y=floor_height, max_y=ceil_height,
-                                                                  min_z=back_dist, max_z=front_dist, vol_number=view)
+                                                                  min_z=back_dist, max_z=front_dist, material_file=material_mapGray, vol_number=view)
+        
+        mat_grid_down =  downsample_material_grid(material_arr)
 
         if network_type=='depth':
             x = vox_tsdf.reshape(1,240,144,240,1)
@@ -167,40 +202,49 @@ def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
             pred_full[ zs:, :, xs//2:-xs//2] += fpred
             surf_full[ zs:, :, xs//2:-xs//2] |= vox_grid_down
             flags_full[ zs:, :, xs//2:-xs//2] |= flags_down
+            mat_full[ zs:, :, xs//2:-xs//2] |= mat_grid_down
 
         elif view==2:
             pred_full[zs:, :, xs:] += fpred
             surf_full[zs:, :, xs:] |= vox_grid_down
             flags_full[zs:, :, xs:] |= flags_down
+            mat_full[ zs:, :, xs:] |= mat_grid_down
 
         elif view==3:
             pred_full[zs//2:-zs//2, :, xs:] += fpred
             surf_full[zs//2:-zs//2, :, xs:] |= vox_grid_down
             flags_full[zs//2:-zs//2, :, xs:] |= flags_down
+            mat_full[ zs//2:-zs//2, :, xs:] |= mat_grid_down
 
         elif view == 4:
             pred_full[:zs, :, xs:] += np.flip(np.swapaxes(fpred,0,2),axis=0)
             surf_full[:zs, :, xs:] |= np.flip(np.swapaxes(vox_grid_down,0,2),axis=0)
             flags_full[:zs, :, xs:] |= np.flip(np.swapaxes(flags_down,0,2),axis=0)
+            mat_full[ :zs, :, xs:] |= np.flip(np.swapaxes(mat_grid_down,0,2),axis=0)
 
         elif view==5:
             pred_full[:zs, :, xs//2:-xs//2] += np.flip(fpred,axis=[0,2])
             surf_full[:zs, :, xs//2:-xs//2] |= np.flip(vox_grid_down,axis=[0,2])
             flags_full[:zs, :, xs//2:-xs//2] |= np.flip(flags_down,axis=[0,2])
+            mat_full[ :zs, :, xs//2:-xs//2] |= np.flip(mat_grid_down,axis=[0,2])
+
         elif view==6:
             pred_full[:zs, :, :xs] += np.flip(fpred,axis=[0,2])
             surf_full[:zs, :, :xs] |= np.flip(vox_grid_down,axis=[0,2])
             flags_full[:zs, :, :xs] |= np.flip(flags_down,axis=[0,2])
+            mat_full[ :zs, :, :xs] |= np.flip(mat_grid_down,axis=[0,2])
 
         elif view==7:
             pred_full[zs//2:-zs//2, :,:xs ] += np.flip(fpred,axis=[0,2])
             surf_full[zs//2:-zs//2, :,:xs ] |= np.flip(vox_grid_down,axis=[0,2])
             flags_full[zs//2:-zs//2, :,:xs ] |= np.flip(flags_down,axis=[0,2])
+            mat_full[ zs//2:-zs//2, :,:xs ] |= np.flip(mat_grid_down,axis=[0,2])
 
         elif view == 8:
             pred_full[zs:, :, :xs] += np.flip(fpred,axis=2)
             surf_full[zs:, :, :xs] |= np.flip(vox_grid_down,axis=2)
             flags_full[zs:, :, :xs] |= np.flip(flags_down,axis=2)
+            mat_full[ zs:, :, :xs] |= np.flip(mat_grid_down,axis=2)
 
     print("                                     \n")
     
@@ -255,13 +299,15 @@ def process(depth_file, rgb_file, gt_file, out_prefix, v_unit, network):
     out_file = out_prefix + '_surface'
     print("Exporting surface to       %s.obj" % out_file)
     obj_export(out_file, surf_full, surf_full.shape, camx, camy, camz, V_UNIT, include_top=INCLUDE_TOP,
-                                                                               triangular=TRIANGULAR_FACES)
+                                                                               triangular=TRIANGULAR_FACES,
+                                                                               material_map=mat_full)
 
     out_file = out_prefix+'_prediction'
     print("Exporting prediction to    %s.obj" % out_file)
     obj_export(out_file, y_pred, (xs*2,ys,zs*2), camx, camy, camz, V_UNIT, include_top=INCLUDE_TOP,
                                                                            triangular=TRIANGULAR_FACES,
-                                                                           inner_faces=INNER_FACES)
+                                                                           inner_faces=INNER_FACES,
+                                                                           material_map=mat_full)
 
     print("Finished!\n")
     
@@ -323,6 +369,7 @@ def parse_arguments():
     parser.add_argument("room",    help="360 rgb", type=str)
     parser.add_argument("camera",  help="output file prefix", type=str)
     parser.add_argument("--v_unit",     help="Voxel size. Default 0.02", type=float, default=0.02, required=False)
+    parser.add_argument("material_file",   help="Path to the material map image")
     parser.add_argument("--network",   help="Network to be used", type=str,
                                        default="EdgeNet", choices=["EdgeNet", "USSCNet"], required=False)
     parser.add_argument("--base_path",   help="Base path", type=str, default=base_path, required=False)
@@ -363,6 +410,7 @@ def parse_arguments():
     depth_map = os.path.join(args.base_path, args.area, 'camera_'+args.camera+'_'+args.room+'_frame_equirectangular_domain_sdepth.png')
     rgb_file = os.path.join(args.base_path, args.area, 'camera_'+args.camera+'_'+args.room+'_frame_equirectangular_domain_srgb.png')
     gt_file = os.path.join(args.base_path, args.area, 'camera_'+args.camera+'_'+args.room+'_frame_equirectangular_domain_gt.pkl')
+    material_file = os.path.join(args.base_path, args.material_file)
     
     network = args.network
     output = os.path.join(args.output_path, args.area + '_'+args.camera+'_'+args.room+'_'+network)
@@ -378,12 +426,12 @@ def parse_arguments():
 
 
 
-    return depth_map, rgb_file, gt_file, output, v_unit, network
+    return depth_map, rgb_file, gt_file, output, v_unit, network,material_file
 
 # Main Function
 def Run():
-    depth_map, rgb_file, gt_file, output, v_unit, network = parse_arguments()
-    process(depth_map, rgb_file, gt_file, output, v_unit, network)
+    depth_map, rgb_file, gt_file, output, v_unit, network,material_file = parse_arguments()
+    process(depth_map, rgb_file, gt_file, output, v_unit, network, material_file)
 
 
 if __name__ == '__main__':

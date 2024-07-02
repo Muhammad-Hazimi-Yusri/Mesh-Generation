@@ -1338,7 +1338,232 @@ void get_gt_CPP(float *point_cloud, int point_cloud_size, float *boundaries, uns
 
 }
 
+//Material downsampling
+__global__
+void downsample_grid_kernel_material( unsigned char *in_grid_GPU, unsigned char *out_grid_GPU, float *parameters_GPU) {
 
+    int vox_idx = threadIdx.x + blockIdx.x * blockDim.x;
+    float downscale = 4;
+
+    int in_vox_size_x = (int)parameters_GPU[VOX_SIZE_X];
+    int in_vox_size_y = (int)parameters_GPU[VOX_SIZE_Y];
+    int in_vox_size_z = (int)parameters_GPU[VOX_SIZE_Z];
+    int out_vox_size_x = (int)in_vox_size_x/downscale;
+    int out_vox_size_y = (int)in_vox_size_y/downscale;
+    int out_vox_size_z = (int)in_vox_size_z/downscale;
+
+    if (vox_idx >= out_vox_size_x * out_vox_size_y * out_vox_size_z){
+      return;
+    }
+
+    int z = (vox_idx / ( out_vox_size_x * out_vox_size_y))%out_vox_size_z ;
+    int y = (vox_idx / out_vox_size_x) % out_vox_size_y;
+    int x = vox_idx % out_vox_size_x;
+
+    // for (int i = 0; i < 16; ++i) {
+    //         sum_occupied[i] = 0;
+    // }
+
+    int sum_occupied[16] = {0};
+    
+  
+    for (int tmp_x = x * downscale; tmp_x < (x + 1) * downscale; ++tmp_x) {
+      for (int tmp_y = y * downscale; tmp_y < (y + 1) * downscale; ++tmp_y) {
+        for (int tmp_z = z * downscale; tmp_z < (z + 1) * downscale; ++tmp_z) {
+
+          int tmp_vox_idx = tmp_z * in_vox_size_x * in_vox_size_y + tmp_y * in_vox_size_z + tmp_x;
+
+          // if (in_grid_GPU[tmp_vox_idx]> 0){
+          //   sum_occupied += 1;
+          //          }
+          if (in_grid_GPU[tmp_vox_idx]!=0){
+          
+            if (in_grid_GPU[tmp_vox_idx]==47){
+              sum_occupied[0] +=1;        
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==193){
+              sum_occupied[1] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==200){
+              sum_occupied[2] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==23){
+              sum_occupied[3] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==106){
+              sum_occupied[4] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==88){
+              sum_occupied[5] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==149){
+              sum_occupied[6] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==191){
+              sum_occupied[7] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==60){
+              sum_occupied[8] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==102){
+              sum_occupied[9] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==77){
+              sum_occupied[10] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==22){
+              sum_occupied[11] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==63){
+              sum_occupied[12] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==169){
+              sum_occupied[13] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==114){
+              sum_occupied[14] += 1;
+            }
+            else if (in_grid_GPU[tmp_vox_idx]==119){
+              sum_occupied[15] += 1;
+            }
+          }
+
+        }
+      }
+    }
+
+
+// __syncthreads(); // synchronize threads in the same block
+// if (threadIdx.x == 0) { // let only one thread do the printing
+//     for (int s=0; s<16; s++){
+//       printf("sum occupied[%d]: %d\n", s, sum_occupied[s]);
+//     }
+// }
+// __syncthreads();
+int counter = 0;
+__syncthreads(); // synchronize again before continuing
+int maxIndex=0;
+for (int i = 0; i < 16; i++) {
+  if (sum_occupied[i] == 0){
+    counter +=1;
+  }
+  if (sum_occupied[i] > sum_occupied[maxIndex]) {
+    maxIndex = i;
+  }
+}
+//printf("maxIndex is %d\n",maxIndex);
+__syncthreads(); // synchronize again before continuing
+  if (counter < 16){
+    if (maxIndex==0){
+      out_grid_GPU[vox_idx] = 47;        
+    }
+    else if (maxIndex==1){
+      out_grid_GPU[vox_idx] = 193;
+    }
+    else if (maxIndex==2){
+      out_grid_GPU[vox_idx] = 200;
+    }
+    else if (maxIndex==3){
+      out_grid_GPU[vox_idx] = 23;
+    }
+    else if (maxIndex==4){
+      out_grid_GPU[vox_idx] = 106;
+    }
+    else if (maxIndex==5){
+      out_grid_GPU[vox_idx] = 88;
+    }
+    else if (maxIndex==6){
+      out_grid_GPU[vox_idx] = 149;
+    }
+    else if (maxIndex==7){
+      out_grid_GPU[vox_idx] = 191;
+    }
+    else if (maxIndex==8){
+      out_grid_GPU[vox_idx] = 60;
+    }
+    else if (maxIndex==9){
+      out_grid_GPU[vox_idx] = 102;
+    }
+    else if (maxIndex==10){
+      out_grid_GPU[vox_idx] = 77;
+    }
+    else if (maxIndex==11){
+      out_grid_GPU[vox_idx] = 22;
+    }
+    else if (maxIndex==12){
+      out_grid_GPU[vox_idx] = 63;
+    }
+    else if (maxIndex==13){
+      out_grid_GPU[vox_idx] = 169;
+    }
+    else if (maxIndex==14){
+      out_grid_GPU[vox_idx] = 114;
+    }
+    else if (maxIndex==15){
+      out_grid_GPU[vox_idx] = 119;
+    }
+  }
+  else{
+    out_grid_GPU[vox_idx] = 0;
+  }
+
+
+    // switch(maxIndex){
+    //   case 0:
+    //     out_grid_GPU[vox_idx] = 47;
+    //     break;
+    //   case 1:
+    //       out_grid_GPU[vox_idx]= 193;
+    //       break;
+    //   case 2:
+    //       out_grid_GPU[vox_idx]= 200;
+    //       break;
+    //   case 3:
+    //       out_grid_GPU[vox_idx]= 23;
+    //       break;
+    //   case 4:
+    //       out_grid_GPU[vox_idx]=196;
+    //       break;
+    //   case 5:
+    //       out_grid_GPU[vox_idx]=41;
+    //       break;
+    //   case 6:
+    //       out_grid_GPU[vox_idx]=149;
+    //       break;
+    //   case 7:
+    //       out_grid_GPU[vox_idx]=191;
+    //       break;
+    //   case 8:
+    //       out_grid_GPU[vox_idx]=60;
+    //       break;
+    //   case 9:
+    //       out_grid_GPU[vox_idx]=102;
+    //       break;
+    //   case 10:
+    //       out_grid_GPU[vox_idx]=77;
+    //       break;
+    //   case 11:
+    //       out_grid_GPU[vox_idx]=22;
+    //       break;
+    //   case 12:
+    //       out_grid_GPU[vox_idx]=63;
+    //       break;
+    //   case 13:
+    //       out_grid_GPU[vox_idx]=169;
+    //       break;
+    //   case 14:
+    //       out_grid_GPU[vox_idx]=114;
+    //       break;
+    //   case 15:
+    //       out_grid_GPU[vox_idx]=119;
+    //       break;
+    //   default:
+    //     //printf("Warning: Unexpected grayscale value %d\n", grayscale);
+    //     break;
+    //   }
+   
+
+}
 
 
 
@@ -1364,7 +1589,7 @@ void downsample_grid_kernel( unsigned char *in_grid_GPU, unsigned char *out_grid
     int x = vox_idx % out_vox_size_x;
 
     int sum_occupied = 0;
-
+  
     for (int tmp_x = x * downscale; tmp_x < (x + 1) * downscale; ++tmp_x) {
       for (int tmp_y = y * downscale; tmp_y < (y + 1) * downscale; ++tmp_y) {
         for (int tmp_z = z * downscale; tmp_z < (z + 1) * downscale; ++tmp_z) {
@@ -1426,6 +1651,52 @@ void downsample_limits_kernel( unsigned char *in_grid_GPU, unsigned char *out_gr
     }    else {
       out_grid_GPU[vox_idx] = 0;
     }
+
+}
+
+void downsample_material_grid_CPP(unsigned char *vox_grid, unsigned char *vox_grid_down) {
+
+  clock_tick t1 = start_timer();
+
+  unsigned char *vox_grid_GPU;
+  unsigned char *vox_grid_down_GPU;
+
+  //int* sum_occupied;
+
+  int num_voxels = vox_size_x * vox_size_y * vox_size_z;
+  int num_voxels_down = num_voxels/64;
+
+  gpuErrchk(cudaMalloc(&vox_grid_GPU, num_voxels * sizeof(unsigned char)));
+  gpuErrchk(cudaMalloc(&vox_grid_down_GPU, num_voxels_down * sizeof(unsigned char)));
+
+  gpuErrchk(cudaMemcpy(vox_grid_GPU, vox_grid, num_voxels * sizeof(unsigned char), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemset(vox_grid_down_GPU, 0, num_voxels_down * sizeof(unsigned char)));
+
+  //gpuErrchk(cudaMalloc(&sum_occupied, 16 * sizeof(int)));
+
+
+  end_timer(t1, "Prepare duration");
+
+  t1 = start_timer();
+  int NUM_BLOCKS = int((num_voxels_down + size_t(NUM_THREADS) - 1) / NUM_THREADS);
+
+  if (debug==1) printf("downsample - NUM_BLOCKS: %d   NUM_THREADS: %d\n" , NUM_BLOCKS,NUM_THREADS);
+
+  downsample_grid_kernel_material<<<NUM_BLOCKS, NUM_THREADS>>>(vox_grid_GPU, vox_grid_down_GPU, parameters_GPU);
+
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaDeviceSynchronize() );
+
+
+  end_timer(t1,"downsample duration");
+
+  cudaMemcpy(vox_grid_down, vox_grid_down_GPU,  num_voxels_down * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+
+  cudaFree(vox_grid_GPU);
+  cudaFree(vox_grid_down_GPU);
+  //cudaFree(sum_occupied);
+
+  end_timer(t1,"cleanup duration");
 
 }
 
@@ -1516,7 +1787,7 @@ void downsample_limits_CPP(unsigned char *vox_grid, unsigned char *vox_grid_down
 __global__
 void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid,
                               float *vox_tsdf, unsigned char *vox_limits, float *baseline,
-                              int *width, int *height, float *boundaries_GPU, int *vol_number, float *parameters_GPU) {
+                              int *width, int *height, float *boundaries_GPU, int *vol_number, float *parameters_GPU,unsigned char *material_data, unsigned char *material_map ) {
 
   float vox_unit_GPU = parameters_GPU[VOX_UNIT];
   float vox_margin_GPU = parameters_GPU[VOX_MARGIN];
@@ -1802,8 +2073,6 @@ void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid
 
   float teta1, teta2;
 
-
-
   /*
   if (wy>0)
      teta1 = asin(wy/hip2);
@@ -1835,6 +2104,11 @@ void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid
   int pixel_x = longitude /(unit_w * CV_PI);
 
   int point_disparity = depth_data[pixel_y * *width + pixel_x];
+  int point_material = material_data[pixel_y * *width + pixel_x];
+  
+  
+  //printf("point_material -> %f,material_map value = %f,  Thread %d", point_material, material_map[vox_idx], vox_idx);
+
   if (point_disparity == 0){ // mising depth
       vox_tsdf[vox_idx] = -1.0;
       return;
@@ -1862,6 +2136,8 @@ void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid
   if (vox_grid[vox_idx] >0 ){
      vox_tsdf[vox_idx] = 0;
      vox_limits[vox_idx] = OCCUPIED;
+     material_map[vox_idx] = point_material;
+     //printf("Occupied, Thread %d, material_map value = %f\n", vox_idx, material_map[vox_idx]);
      return;
   }
 
@@ -1873,6 +2149,8 @@ void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid
       sign = (point_depth - vox_depth)/abs(point_depth - vox_depth);
   }
   vox_tsdf[vox_idx] = sign;
+  //material_map[vox_idx] = point_material;
+  //printf("Non occupied, Thread %d, material_map value = %f\n", vox_idx, material_map[vox_idx]);
   if (sign >0.0) {
     vox_limits[vox_idx] = EMPTY_VISIBLE;
   } else {
@@ -2097,7 +2375,11 @@ void SquaredDistanceTransform(unsigned char *depth_data, unsigned char *vox_grid
 __global__
 void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_grid,
                               float *vox_tsdf, unsigned char *vox_limits,
-                              int *width, int *height, float *boundaries_GPU, int *vol_number, float *parameters_GPU) {
+                              int *width, int *height, float *boundaries_GPU, int *vol_number, float *parameters_GPU,
+                              uint16_t *material_data, unsigned char *material_map ) {
+
+
+
 
   float vox_unit_GPU = parameters_GPU[VOX_UNIT];
   float vox_margin_GPU = parameters_GPU[VOX_MARGIN];
@@ -2119,6 +2401,7 @@ void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_
   int search_region = (int)roundf(vox_margin_GPU/vox_unit_GPU);
 
   int vox_idx = threadIdx.x + blockIdx.x * blockDim.x;
+
 
   if (vox_idx >= vox_size_x_GPU * vox_size_y_GPU * vox_size_z_GPU){
       return;
@@ -2377,7 +2660,7 @@ void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_
   }
 
   float CV_PI = 3.141592;
-  float longitude, latitude, point_depth;
+  float longitude, latitude, point_depth, point_material;
 
   float hip1 = sqrtf(wx*wx + wz*wz);
   float hip2 = sqrtf(hip1*hip1 + wy*wy);
@@ -2415,6 +2698,8 @@ void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_
   int pixel_x = longitude /(unit_w * CV_PI);
 
   point_depth = depth_data[pixel_y * *width + pixel_x];
+  point_material = material_data[pixel_y * *width + pixel_x];
+
   if (point_depth == 65535.){ // mising depth
       vox_tsdf[vox_idx] = -1.0;
       return;
@@ -2431,6 +2716,7 @@ void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_
   //OCCUPIED
   if (vox_grid[vox_idx] >0 ){
      vox_tsdf[vox_idx] = 0;
+     material_map[vox_idx] = point_material;
      vox_limits[vox_idx] = OCCUPIED;
      return;
   }
@@ -2468,6 +2754,7 @@ void SquaredDistanceTransform_stanford(uint16_t *depth_data, unsigned char *vox_
             }
         }
     }
+    
     iiy = min(y+radius,vox_size_y_GPU);
     for (int iix = max(0,x-radius); iix < min((int)vox_size_x_GPU,x+radius+1); iix++){
         for (int iiz = max(0,z-radius); iiz < min((int)vox_size_z_GPU,z+radius+1); iiz++){
@@ -2698,7 +2985,9 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
                       int width,
                       int height,
                       float *boundaries,
-                      int vol_number) {
+                      int vol_number,
+                      unsigned char *material_data,
+                      unsigned char *material_map) {
 
   clock_tick t1 = start_timer();
 
@@ -2713,6 +3002,10 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
   int           *width_GPU;
   int           *height_GPU;
   int           *vol_number_GPU;
+  
+  //Sourish Added this
+  unsigned char *material_data_GPU;
+  unsigned char *material_map_GPU;
 
   int num_voxels = vox_size_x * vox_size_y * vox_size_z;
   int num_pixels = width * height;
@@ -2731,6 +3024,9 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
   gpuErrchk(cudaMalloc(&width_GPU,      sizeof(int)));
   gpuErrchk(cudaMalloc(&height_GPU,     sizeof(int)));
   gpuErrchk(cudaMalloc(&vol_number_GPU, sizeof(int)));
+  //Sourish Added this
+  gpuErrchk(cudaMalloc(&material_data_GPU, num_pixels * sizeof(unsigned char)));
+  gpuErrchk(cudaMalloc(&material_map_GPU,   num_voxels * sizeof(unsigned char)));
 
   gpuErrchk(cudaMemcpy(boundaries_GPU,       boundaries,     6 * sizeof(float), cudaMemcpyHostToDevice));
   gpuErrchk(cudaMemcpy(vox_grid_GPU,         vox_grid,       num_voxels * sizeof(unsigned char), cudaMemcpyHostToDevice));
@@ -2740,11 +3036,16 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
   gpuErrchk(cudaMemcpy(width_GPU,            &width,         sizeof(int), cudaMemcpyHostToDevice));
   gpuErrchk(cudaMemcpy(height_GPU,           &height,        sizeof(int), cudaMemcpyHostToDevice));
   gpuErrchk(cudaMemcpy(vol_number_GPU,       &vol_number,    sizeof(int), cudaMemcpyHostToDevice));
+  //Sourish Added this
+  gpuErrchk(cudaMemcpy(material_data_GPU,      material_data,     num_pixels * sizeof(unsigned char), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(material_map_GPU,        material_map,       num_voxels * sizeof(unsigned char), cudaMemcpyHostToDevice));
+
 
   gpuErrchk(cudaMemset(vox_limits_GPU,       0,             num_voxels * sizeof(unsigned char)));
   gpuErrchk(cudaMemset(vox_tsdf_GPU,         0,             num_voxels * sizeof(float)));
   gpuErrchk(cudaMemset(vox_tsdf_edges_GPU,         0,             num_voxels * sizeof(float)));
-
+  
+ 
 
   end_timer(t1, "Prepare duration");
 
@@ -2757,14 +3058,14 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
 */
   SquaredDistanceTransform<<<NUM_BLOCKS, NUM_THREADS>>>(depth_data_GPU, vox_grid_GPU, vox_tsdf_GPU, vox_limits_GPU,
                                                  baseline_GPU, width_GPU, height_GPU,
-                                                 boundaries_GPU, vol_number_GPU, parameters_GPU);
+                                                 boundaries_GPU, vol_number_GPU, parameters_GPU, material_data_GPU,material_map_GPU);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 
   SquaredDistanceTransform<<<NUM_BLOCKS, NUM_THREADS>>>(depth_data_GPU, vox_grid_edges_GPU, vox_tsdf_edges_GPU, vox_limits_GPU,
                                                  baseline_GPU, width_GPU, height_GPU,
-                                                 boundaries_GPU, vol_number_GPU, parameters_GPU);
+                                                 boundaries_GPU, vol_number_GPU, parameters_GPU, material_data_GPU,material_map_GPU);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
@@ -2772,10 +3073,18 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
 
   end_timer(t1,"SquaredDistanceTransform duration");
 
+
+
   cudaMemcpy(vox_tsdf, vox_tsdf_GPU,      num_voxels * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(vox_tsdf_edges, vox_tsdf_edges_GPU,      num_voxels * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(vox_limits, vox_limits_GPU,  num_voxels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+  //Sourish Added this
+  cudaMemcpy(material_map,       material_map_GPU,       num_voxels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
+  // int i =0;
+  // for (i=0; i < num_voxels * sizeof(unsigned char);i++){
+  //   printf("material_map value = %d",material_map[i]);
+  // }
   cudaFree(boundaries_GPU);
   cudaFree(vox_grid_GPU);
   cudaFree(vox_grid_edges_GPU);
@@ -2787,6 +3096,9 @@ void FTSDFDepth_CPP(unsigned char *depth_data,
   cudaFree(width_GPU);
   cudaFree(height_GPU);
   cudaFree(vol_number_GPU);
+  //Sourish Added this
+  cudaFree(material_data_GPU);
+  cudaFree(material_map_GPU);
 
   end_timer(t1,"cleanup duration");
 
@@ -2804,7 +3116,9 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
                       int width,
                       int height,
                       float *boundaries,
-                      int vol_number) {
+                      int vol_number,
+                      uint16_t *material_data,
+                      unsigned char *material_map ) {
 
   clock_tick t1 = start_timer();
 
@@ -2818,6 +3132,11 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
   int           *width_GPU;
   int           *height_GPU;
   int           *vol_number_GPU;
+
+  //Sourish Added this
+  uint16_t *material_data_GPU;
+  unsigned char *material_map_GPU;
+
 
   int num_voxels = vox_size_x * vox_size_y * vox_size_z;
   int num_pixels = width * height;
@@ -2848,19 +3167,25 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
   gpuErrchk(cudaMemset(vox_tsdf_GPU,         0,             num_voxels * sizeof(float)));
   gpuErrchk(cudaMemset(vox_tsdf_edges_GPU,         0,             num_voxels * sizeof(float)));
 
+  //Sourish Added this
+  gpuErrchk(cudaMemcpy(material_data_GPU,      material_data,     num_pixels * sizeof(uint16_t), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(material_map_GPU,        material_map,       num_voxels * sizeof(unsigned char), cudaMemcpyHostToDevice))
+
+
+
 
   end_timer(t1, "Prepare duration");
 
   t1 = start_timer();
   int NUM_BLOCKS = int((num_voxels + size_t(NUM_THREADS) - 1) / NUM_THREADS);
 
- /*  SquaredDistanceTransform(unsigned char *depth_data, float *vox_grid,
+ /*SquaredDistanceTransform(unsigned char *depth_data, float *vox_grid,
                               float *vox_tsdf, unsigned char *vox_limits, float *baseline,
                               int *width, int *height, float *boundaries_GPU, int *vol_number, float *parameters_GPU)
 */
   SquaredDistanceTransform_stanford<<<NUM_BLOCKS, NUM_THREADS>>>(depth_data_GPU, vox_grid_GPU, vox_tsdf_GPU, vox_limits_GPU,
                                                  width_GPU, height_GPU,
-                                                 boundaries_GPU, vol_number_GPU, parameters_GPU);
+                                                 boundaries_GPU, vol_number_GPU, parameters_GPU, material_data_GPU,material_map_GPU);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
@@ -2868,7 +3193,7 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
 
   SquaredDistanceTransform_stanford<<<NUM_BLOCKS, NUM_THREADS>>>(depth_data_GPU, vox_grid_edges_GPU, vox_tsdf_edges_GPU, vox_limits_GPU,
                                                  width_GPU, height_GPU,
-                                                 boundaries_GPU, vol_number_GPU, parameters_GPU);
+                                                 boundaries_GPU, vol_number_GPU, parameters_GPU, material_data_GPU,material_map_GPU);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
@@ -2879,6 +3204,9 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
   cudaMemcpy(vox_tsdf,       vox_tsdf_GPU,       num_voxels * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(vox_tsdf_edges, vox_tsdf_edges_GPU, num_voxels * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(vox_limits,     vox_limits_GPU,     num_voxels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+  //Sourish Added this
+  cudaMemcpy(material_map,       material_map_GPU,       num_voxels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+
 
   cudaFree(boundaries_GPU);
   cudaFree(vox_grid_GPU);
@@ -2890,6 +3218,9 @@ void FTSDFDepth_stanford_CPP(uint16_t *depth_data,
   cudaFree(width_GPU);
   cudaFree(height_GPU);
   cudaFree(vol_number_GPU);
+  //Sourish Added this
+  cudaFree(material_data_GPU);
+  cudaFree(material_map_GPU);
 
   end_timer(t1,"cleanup duration");
 
@@ -2958,7 +3289,9 @@ extern "C" {
                       int width,
                       int height,
                       float *boundaries,
-                      int vol_number) {
+                      int vol_number,
+                      unsigned char *material_data,
+                      unsigned char *material_map) {
                                  FTSDFDepth_CPP(depth_data,
                                                 vox_grid,
                                                 vox_grid_edges,
@@ -2969,7 +3302,9 @@ extern "C" {
                                                 width,
                                                 height,
                                                 boundaries,
-                                                vol_number) ;
+                                                vol_number,
+                                                material_data,
+                                                material_map);
                   }
     void FTSDFDepth_stanford(uint16_t *depth_data,
                       unsigned char *vox_grid,
@@ -2980,7 +3315,9 @@ extern "C" {
                       int width,
                       int height,
                       float *boundaries,
-                      int vol_number) {
+                      int vol_number, 
+                      uint16_t *material_data,
+                      unsigned char *material_map) {
                                  FTSDFDepth_stanford_CPP(depth_data,
                                                 vox_grid,
                                                 vox_grid_edges,
@@ -2990,8 +3327,16 @@ extern "C" {
                                                 width,
                                                 height,
                                                 boundaries,
-                                                vol_number) ;
+                                                vol_number,
+                                                material_data,
+                                                material_map) ;
                   }
+
+    void downsample_material_grid (unsigned char *vox_grid,
+                            unsigned char *vox_grid_down) {
+                                 downsample_material_grid_CPP(vox_grid,
+                                                vox_grid_down) ;
+                          }
     void downsample_grid (unsigned char *vox_grid,
                             unsigned char *vox_grid_down) {
                                  downsample_grid_CPP(vox_grid,

@@ -19,8 +19,8 @@ V_UNIT=0.02 #Not important here
 #in_path = '/media/ad01345/Seagate Expansion Drive/stanford'
 #out_path = '/media/ad01345/Seagate Expansion Drive/stanford_processed'
 
-#in_path = './Data/stanford'
-#out_path = './Data/stanford_processed'
+in_path = './Data/stanford'
+out_path = './Data/stanford_processed'
 
 
 #depth_file = './depth/camera_0e30c45ea0604ddeb7467fd384362503_office_7_frame_equirectangular_domain_depth.png'
