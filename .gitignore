@@ -3,7 +3,8 @@ weights/
 log/*.log
 log/*.out
 log/*.error
-
+Output/
+Data/
 .idea/
 env/
 __pycache__/
