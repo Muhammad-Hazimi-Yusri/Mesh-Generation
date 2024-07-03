@@ -561,7 +561,21 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
             majority_texture[class_names[voxel_class]] = material_labels.get(most_common_texture_id)
 
 
-    
+    # find highest point of voxel that is not empty
+    highest_point = 0
+    for y in range(sy):
+        if np.max(vox[:,y,:]) > 0:
+            highest_point = y
+    print("highest point is ", highest_point)
+
+    # these numbers are found by trial and error/estimation
+    ceiling_cutoff = highest_point - 1
+    # different cutoff for different outputs apparently
+    if name == "./Output/Input_prediction" :
+        ceiling_cutoff = highest_point - 13
+    elif name == "./Output/Input_prediction_mesh":
+        ceiling_cutoff = highest_point - 13
+    print("ceiling cutoff is ", ceiling_cutoff)
 
     with open(name+".obj", 'w') as obj_file, open(name+".mtl", 'w') as mtl_file:
 
@@ -569,7 +583,9 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
 
         for x in range(sx):
             for y in range(sy):
-                if not include_top and y>26:
+                # old code have y>26 as cutoff point, have no clue where he got this number, doesnt work for all models so I changed it to more dynamic cutoff point
+                if not include_top and y>ceiling_cutoff:
+                    #print("skipping top at y=",y)
                     continue
                 for z in range(sz):
                     mtl = int(vox[x,y,z])
