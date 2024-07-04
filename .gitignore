@@ -3,7 +3,7 @@ weights/
 log/*.log
 log/*.out
 log/*.error
-Output/
+Output/clutter/
 Data/
 .idea/
 env/

@@ -572,9 +572,9 @@ def obj_export(name, vox, shape, camx, camy, camz, v_unit, include_top=False, tr
     ceiling_cutoff = highest_point - 1
     # different cutoff for different outputs apparently
     if name == "./Output/Input_prediction" :
-        ceiling_cutoff = highest_point - 13
+        ceiling_cutoff = highest_point - 16
     elif name == "./Output/Input_prediction_mesh":
-        ceiling_cutoff = highest_point - 13
+        ceiling_cutoff = highest_point - 16
     print("ceiling cutoff is ", ceiling_cutoff)
 
     with open(name+".obj", 'w') as obj_file, open(name+".mtl", 'w') as mtl_file:
