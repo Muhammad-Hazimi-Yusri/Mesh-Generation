@@ -4,7 +4,6 @@ log/*.log
 log/*.out
 log/*.error
 Output/clutter/
-Data/
 .idea/
 env/
 __pycache__/
