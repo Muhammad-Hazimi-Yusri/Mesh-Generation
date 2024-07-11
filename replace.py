@@ -24,5 +24,5 @@ def split_mesh(obj_file):
     with open(obj_file, 'w') as file:
         file.writelines(new_lines)
 
-split_mesh("C:\Project\AV-VR-Internship\edgenet360\Output\Input_prediction_mesh.obj")
-#split_mesh("C:\Project\AV-VR-Internship\edgenet360\Data\stanford_processed\\room3\\area_3_2b70fafb2e6f40f193a3d912ff7e5cbe_office_5_EdgeNet_prediction_mesh.obj")
+split_mesh("C:\Project\AVVR-Pipeline-Internship\edgenet360\Output\Input_prediction_mesh.obj")
+#split_mesh("C:\Project\AVVR-Pipeline-Internship\edgenet360\Data\stanford_processed\\room3\\area_3_2b70fafb2e6f40f193a3d912ff7e5cbe_office_5_EdgeNet_prediction_mesh.obj")
