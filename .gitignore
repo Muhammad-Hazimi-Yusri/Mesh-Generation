@@ -8,3 +8,5 @@ Output/clutter/
 env/
 __pycache__/
 lib_edgenet360/__pycache__/
+# Make sure there is Data/Input folder dir alr
+Data/Input/
