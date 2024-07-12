@@ -7,7 +7,7 @@ from lib_edgenet360.file_utils import voxel_export, rgb_voxel_export
 import cv2
 import matplotlib.pyplot as plt
 from lib_edgenet360.preproc import plane_estimate, find_limits_v2, complete_depth, find_limits_edge, \
-    find_planes, ang_disparity, pt_disparity, fix_limits
+    find_planes, find_planes_mono, ang_disparity, pt_disparity, fix_limits
 import matplotlib.pyplot as plt
 import os
 
@@ -50,7 +50,14 @@ def process(depth_file, rgb_file, out_depth_file, baseline):
 
     bilateral=cv2.bilateralFilter(bgr_image,3,75,75)
 
-    new_depth_image, region_mask, edges_mask, inf_region_mask, close_region_mask = find_planes(point_cloud, bilateral, wide_edges, depth_image, thin_edges, baseline=baseline)
+    #new_depth_image, region_mask, edges_mask, inf_region_mask, close_region_mask = find_planes(point_cloud, bilateral, wide_edges, depth_image, thin_edges, baseline=baseline)
+
+    #new_depth_image, complete_region_mask, edges_mask, inf_region_mask, close_region_mask = find_planes_mono(point_cloud, bilateral, wide_edges, depth_image, thin_edges)
+
+    # Clear top and bottom regions
+    new_depth_image = depth_image.copy()
+    new_depth_image[:250] = 0
+    new_depth_image[-250:] = 0
 
     cv2.imwrite(out_depth_file, new_depth_image)
 

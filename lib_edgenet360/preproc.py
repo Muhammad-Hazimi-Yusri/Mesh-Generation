@@ -503,6 +503,88 @@ def find_planes(pc, rgb_image, edges_image, depth_image, thin_edges, baseline):
 
     return new_depth_image, complete_region_mask, edges_mask, inf_region_mask, close_region_mask
 
+def find_planes_mono(pc, rgb_image, edges_image, depth_image, thin_edges):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    h, w = edges_image.shape
+    complete_region_mask = np.zeros((h, w), np.uint8)
+    inf_region_mask = np.zeros((h, w), np.uint8)
+    close_region_mask = np.zeros((h, w), np.uint8)
+    new_depth_image = depth_image.copy()
+
+    step = 75
+    combined = rgb_image.copy()
+
+    # Function to estimate plane from depth values
+    def estimate_plane(depth_values, x_coords, y_coords):
+        A = np.column_stack((x_coords, y_coords, np.ones_like(x_coords)))
+        b = depth_values
+        plane_params, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
+        return plane_params
+
+    for startx in np.arange(0, w, step):
+        for starty in np.arange(250, h-250, step):
+            if (inf_region_mask[starty,startx] > 0) or \
+               (close_region_mask[starty,startx] > 0) or \
+               (complete_region_mask[starty,startx] > 0):
+                continue
+
+            paint_x_start = max(0, startx - step // 2)
+            paint_y_start = max(0, starty - step // 2)
+            paint_x_end = min(startx + step // 2, w)
+            paint_y_end = min(starty + step // 2, h)
+
+            region_mask = find_region(startx, starty, rgb_image, step, thin_edges)
+            edges_mask = region_mask & edges_image
+
+            # Extract depth values and coordinates for the region
+            y_coords, x_coords = np.where(edges_mask > 0)
+            depth_values = depth_image[edges_mask > 0]
+
+            if len(depth_values) < 10:  # Skip if not enough points
+                continue
+
+            # Estimate plane
+            a, b, c = estimate_plane(depth_values, x_coords, y_coords)
+
+            if abs(a) < 0.3 and abs(b) < 0.3:
+                # Visualize progress
+                combined[:, :, 0] = rgb_image[:, :, 0] / 2 + thin_edges / 4 + region_mask / 4
+                combined[:, :, 1] = rgb_image[:, :, 1] / 2 + complete_region_mask / 2
+                combined[:, :, 2] = rgb_image[:, :, 2] / 2 + inf_region_mask / 2
+
+                # Calculate new depth values based on the plane equation
+                y_coords, x_coords = np.where(region_mask > 0)
+                new_depth = a * x_coords + b * y_coords + c
+
+                # Check if the plane is too far or too close
+                if np.max(new_depth) > np.percentile(depth_image, 95):
+                    inf_region_mask = inf_region_mask | region_mask
+                elif np.min(new_depth) < np.percentile(depth_image, 5):
+                    close_region_mask = close_region_mask | region_mask
+                else:
+                    new_depth_image[region_mask > 0] = new_depth
+                    complete_region_mask = complete_region_mask | region_mask
+
+                # Visualize progress
+                combined[:, :, 0] = rgb_image[:, :, 0] / 2 + thin_edges / 4
+                combined[:, :, 1] = rgb_image[:, :, 1] / 2 + complete_region_mask / 2
+                combined[:, :, 2] = rgb_image[:, :, 2] / 2 + inf_region_mask / 2
+                plt.imshow(combined)
+                plt.draw()
+                plt.pause(0.0001)
+
+    # Final visualization
+    combined[:, :, 0] = rgb_image[:, :, 0] / 2 + thin_edges / 4
+    combined[:, :, 1] = rgb_image[:, :, 1] / 2 + complete_region_mask / 2
+    combined[:, :, 2] = rgb_image[:, :, 2] / 2 + inf_region_mask / 2
+
+    # Clear top and bottom regions
+    new_depth_image[:250] = 0
+    new_depth_image[-250:] = 0
+
+    return new_depth_image, complete_region_mask, edges_mask, inf_region_mask, close_region_mask
 
 def find_planes_stanford(pc, rgb_image, edges_image, depth_image, thin_edges):
 
