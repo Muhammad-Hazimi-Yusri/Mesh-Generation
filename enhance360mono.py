@@ -1,109 +1,117 @@
-import argparse
+import numpy as np
 import cv2
 import os
-import numpy as np
 
-# Define the data path
-DATA_PATH = './Data'
+def find_limits_mono(depth_image):
+    # Assuming depth values increase with distance
+    # You may need to invert this if your depth values decrease with distance
+    valid_depths = depth_image[depth_image > 0]
+    
+    if len(valid_depths) == 0:
+        return 0, 0, 0, 0, 0, 0
 
-def apply_gradient_to_white(image, gradient_height):
-    h, w = image.shape[:2]
+    # Use percentiles to estimate limits, ignoring potential outliers
+    ceil_height = np.percentile(valid_depths, 5)
+    floor_height = np.percentile(valid_depths, 95)
     
-    # Create top gradient
-    top_gradient = np.linspace(0, 1, gradient_height)[:, np.newaxis]
-    top_gradient = np.tile(top_gradient, (1, w))
-    
-    # Create bottom gradient
-    bottom_gradient = np.linspace(1, 0, gradient_height)[:, np.newaxis]
-    bottom_gradient = np.tile(bottom_gradient, (1, w))
-    
-    # Apply gradient (fade to white)
-    image[:gradient_height] = image[:gradient_height] * top_gradient + 255 * (1 - top_gradient)
-    image[-gradient_height:] = image[-gradient_height:] * bottom_gradient + 255 * (1 - bottom_gradient)
-    
-    return image
+    h, w = depth_image.shape
+    left_dist = 0
+    right_dist = w - 1
+    front_dist = np.percentile(valid_depths, 5)
+    back_dist = np.percentile(valid_depths, 95)
 
-def process(depth_file, out_depth_file):
-    print(f"Attempting to read depth image from: {depth_file}")
+    return ceil_height, floor_height, front_dist, back_dist, left_dist, right_dist
+
+def fix_limits_mono(depth_image, ceil_height, floor_height, front_dist, back_dist, left_dist, right_dist):
+    # Clip the depth values to the estimated range
+    depth_image = np.clip(depth_image, front_dist, back_dist)
     
-    if not os.path.exists(depth_file):
-        raise FileNotFoundError(f"The file {depth_file} does not exist.")
+    # Normalize the depth values
+    depth_range = back_dist - front_dist
+    normalized_depth = (depth_image - front_dist) / depth_range
     
+    # Scale back to the original depth range
+    depth_image = front_dist + normalized_depth * depth_range
+    
+    return depth_image.astype(np.uint16)
+
+def process(input_dir, depth_file, rgb_file, out_depth_file):
+    depth_path = os.path.join(input_dir, depth_file)
+    rgb_path = os.path.join(input_dir, rgb_file)
+    out_path = os.path.join(input_dir, out_depth_file)
+
+    print(f"Processing depth file: {depth_path}")
+    print(f"Processing RGB file: {rgb_path}")
+    print(f"Output will be saved to: {out_path}")
+
     # Read the depth image
-    depth_image = cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)
-    
+    depth_image = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
     if depth_image is None:
-        raise ValueError(f"Failed to read the image file: {depth_file}")
-    
-    print(f"Depth image shape: {depth_image.shape}")
-    print(f"Depth image type: {depth_image.dtype}")
-    print(f"Depth image min value: {np.min(depth_image)}")
-    print(f"Depth image max value: {np.max(depth_image)}")
+        print(f"Error: Could not read depth image from {depth_path}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Does the file exist? {os.path.exists(depth_path)}")
+        print(f"Directory contents: {os.listdir(input_dir)}")
+        return
 
-    # If the image has multiple channels, use only the first channel
+    # Read the RGB image
+    rgb_image = cv2.imread(rgb_path, cv2.IMREAD_COLOR)
+    if rgb_image is None:
+        print(f"Error: Could not read RGB image from {rgb_path}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Does the file exist? {os.path.exists(rgb_path)}")
+        print(f"Directory contents: {os.listdir(input_dir)}")
+        return
+
+    print(f"Depth image shape: {depth_image.shape}, dtype: {depth_image.dtype}")
+    print(f"RGB image shape: {rgb_image.shape}, dtype: {rgb_image.dtype}")
+
+    # Convert depth image to single channel if necessary
     if len(depth_image.shape) > 2:
-        depth_image = depth_image[:,:,0]
-    
-    # Convert to float32 for processing
-    depth_image = depth_image.astype(np.float32)
+        depth_image = cv2.cvtColor(depth_image, cv2.COLOR_BGR2GRAY)
+        print(f"Converted depth image to single channel. New shape: {depth_image.shape}")
 
-    # Create a copy of the depth image
-    new_depth_image = depth_image.copy()
+    if depth_image.dtype != np.uint16:
+        depth_image = (depth_image.astype(np.float32) * 65535 / 255).astype(np.uint16)
+        print(f"Converted depth image to uint16. New dtype: {depth_image.dtype}")
 
-    # Apply gradient to top and bottom regions
-    gradient_height = 250
-    new_depth_image = apply_gradient_to_white(new_depth_image, gradient_height)
+    # Find room limits
+    ceil_height, floor_height, front_dist, back_dist, left_dist, right_dist = find_limits_mono(depth_image)
 
-    # Convert back to uint8
-    new_depth_image = np.clip(new_depth_image, 0, 255).astype(np.uint8)
+    print(f"Room dimensions:")
+    print(f"Height: {floor_height - ceil_height:.2f} units")
+    print(f"Width: {right_dist - left_dist:.2f} units")
+    print(f"Length: {back_dist - front_dist:.2f} units")
 
-    print(f"Processed image shape: {new_depth_image.shape}")
-    print(f"Processed image type: {new_depth_image.dtype}")
-    print(f"Processed image min value: {np.min(new_depth_image)}")
-    print(f"Processed image max value: {np.max(new_depth_image)}")
+    # Fix limits
+    fixed_depth = fix_limits_mono(
+        depth_image, 
+        ceil_height, floor_height, front_dist, back_dist, left_dist, right_dist
+    )
 
-    print(f"Saving processed depth image to: {out_depth_file}")
-    
+    # Enhance contrast for visualization
+    fixed_depth_normalized = cv2.normalize(fixed_depth, None, 0, 255, cv2.NORM_MINMAX)
+    fixed_depth_visible = fixed_depth_normalized.astype(np.uint8)
+
     # Save the processed depth image
-    cv2.imwrite(out_depth_file, new_depth_image)
-    
-    if not os.path.exists(out_depth_file):
-        raise IOError(f"Failed to save the processed image to {out_depth_file}")
-    
-    print("Processing completed successfully.")
+    cv2.imwrite(out_path, fixed_depth)
+    print(f"Saved enhanced depth map to: {out_path}")
+
+    # Save a visible version for easy inspection
+    cv2.imwrite(out_path.replace('.png', '_visible.png'), fixed_depth_visible)
+    print(f"Saved visible enhanced depth map to: {out_path.replace('.png', '_visible.png')}")
 
 def parse_arguments():
+    import argparse
     parser = argparse.ArgumentParser(description="360 mono depth map enhancer")
-    parser.add_argument("input_dir", help="Input directory", type=str)
     parser.add_argument("depth_map", help="Input depth map filename", type=str)
+    parser.add_argument("rgb", help="Input RGB image filename", type=str)
     parser.add_argument("output", help="Output depth map filename", type=str)
-    parser.add_argument("--data_path", help=f"Data path. Default {DATA_PATH}", type=str,
-                        default=DATA_PATH, required=False)
-    
-    args = parser.parse_args()
-    
-    # Use the provided or default DATA_PATH
-    data_path = args.data_path
-    
-    depth_file = os.path.join(data_path, args.input_dir, args.depth_map)
-    out_depth_file = os.path.join(data_path, args.input_dir, args.output)
-    
-    print(f"Input depth file path: {depth_file}")
-    print(f"Output depth file path: {out_depth_file}")
-    
-    return depth_file, out_depth_file
+    return parser.parse_args()
 
 def main():
-    try:
-        depth_file, out_depth_file = parse_arguments()
-        process(depth_file, out_depth_file)
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        print(f"Current working directory: {os.getcwd()}")
-        print("Directory contents:")
-        for root, dirs, files in os.walk("."):
-            for file in files:
-                print(os.path.join(root, file))
+    args = parse_arguments()
+    input_dir = os.path.join("Data", "Input")
+    process(input_dir, args.depth_map, args.rgb, args.output)
 
 if __name__ == '__main__':
     main()
