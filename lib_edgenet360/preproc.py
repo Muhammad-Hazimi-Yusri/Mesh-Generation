@@ -806,6 +806,39 @@ def fix_limits(pc, depth_image, ceil_height, floor_height, front_dist, back_dist
 
     return new_depth_image
 
+import numpy as np
+import cv2
+
+def fix_limits_mono(depth_image, ceil_height, floor_height, front_dist, back_dist, right_dist, left_dist):
+    h, w = depth_image.shape
+    new_depth_image = depth_image.copy()
+
+    # Calculate percentiles for more robust limits
+    low_percentile = np.percentile(depth_image, 5)
+    high_percentile = np.percentile(depth_image, 95)
+
+    # Clip extreme values
+    new_depth_image = np.clip(new_depth_image, low_percentile, high_percentile)
+
+    # Smooth transitions
+    kernel_size = 15
+    kernel = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size * kernel_size)
+    smoothed = cv2.filter2D(new_depth_image, -1, kernel)
+
+    # Create a mask for areas to smooth (near the edges)
+    edge_width = 50
+    mask = np.zeros_like(new_depth_image)
+    mask[:edge_width, :] = 1
+    mask[-edge_width:, :] = 1
+    mask[:, :edge_width] = 1
+    mask[:, -edge_width:] = 1
+
+    # Apply smoothing only to the edges
+    new_depth_image = np.where(mask, smoothed, new_depth_image)
+
+    # Ensure the image remains in uint16 format
+    return new_depth_image.astype(np.uint16)
+
 def fix_limits_stanford(pc, depth_image, ceil_height, floor_height, front_dist, back_dist, right_dist, left_dist):
     wx, wy, wz, lat, long, wrd = tuple(range(6))
 
