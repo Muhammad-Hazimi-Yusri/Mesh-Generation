@@ -35,7 +35,11 @@ if __name__ == "__main__":
     
     # Call the split_mesh function with the constructed path
     split_mesh(obj_file_path)
+<<<<<<< HEAD
     
     # Uncomment and modify this line if you need to process the stanford_processed file as well
     # stanford_obj_path = os.path.join(current_dir, "Data", "stanford_processed", "room3", "area_3_2b70fafb2e6f40f193a3d912ff7e5cbe_office_5_EdgeNet_prediction_mesh.obj")
     # split_mesh(stanford_obj_path)
+=======
+#split_mesh("E:\Coding\AVVR-Pipeline-Internship\edgenet360\Data\stanford_processed\\room3\\area_3_2b70fafb2e6f40f193a3d912ff7e5cbe_office_5_EdgeNet_prediction_mesh.obj")
+>>>>>>> ca57b33160f2823f18f38ece3250af78437b37ff
