@@ -66,7 +66,7 @@ def process(depth_file, material_file, rgb_file, out_prefix):
     from lib_edgenet360.post_process import voxel_filter, voxel_fill, fill_limits_vox, instance_remover,\
                                             remove_internal_voxels_v2
 
-    from tensorflow.keras.optimizers.legacy import SGD
+    from tensorflow.keras.optimizers import SGD
     import cv2
 
      # Load the material map file
@@ -112,7 +112,7 @@ def process(depth_file, material_file, rgb_file, out_prefix):
 
     print("\nLoading %s..." % NETWORK)
     model, network_type = get_network_by_name(NETWORK)
-    model.compile(optimizer=SGD(lr=0.01, decay=0.005,  momentum=0.9),
+    model.compile(optimizer=SGD(learning_rate=0.01, decay=0.005,  momentum=0.9),
                   loss=weighted_categorical_crossentropy
                   ,metrics=[comp_iou, seg_iou]
                   )
