@@ -1,5 +1,4 @@
 paths.conf
-weights/
 log/*.log
 log/*.out
 log/*.error
